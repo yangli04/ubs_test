@@ -8,9 +8,9 @@ rule all:
 #                rib_table=expand("map_sncRNA/table/{sample}_hisat3n_table.tsv", sample=SAMPLE),
 #                m1="map_sncRNA/calculated_rate/methylation_level_filtered.tsv",    
 #                m2="map_sncRNA/calculated_rate/methylation_level_notfiltered.tsv"
-		sncrna_aligned=expand("map_sncRNA/{sample}.ribosomal.sam",sample=ADDSAMPLE)
-                fq1="sncRNA_depleted/{sample}_R1.fastq",
-		summary="map_sncRNA/{sample}.sncRNA.summary"
+                sncrna_aligned=expand("map_sncRNA/{sample}.ribosomal.sam",sample=ADDSAMPLE),
+                fq1=expand("sncRNA_depleted/{sample}_R1.fastq",sample=ADDSAMPLE),
+		summary=expand("map_sncRNA/{sample}.sncRNA.summary",sample=ADDSAMPLE)
 
 # # PE
 # rule trim:
