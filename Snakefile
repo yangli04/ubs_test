@@ -3,14 +3,14 @@ SAMPLE=["XY-1_S10","XY-2_S11","XY-3_S12","XY-4_S13","XY-5_S14","XY-6_S15"]
 ADDSAMPLE=['XY-1_S45','XY-2_S46','XY-3_S47','XY-4_S48','XY-5_S49','XY-6_S50']
 #SAMPLE_ALL=SAMPLE+ADDSAMPLE
 rule all:
-        input:
-#                sorted_sam=expand("map_sncRNA/sorted_sam/{sample}.sorted.sam", sample=SAMPLE_ALL),
-#                rib_table=expand("map_sncRNA/table/{sample}_hisat3n_table.tsv", sample=SAMPLE),
-#                m1="map_sncRNA/calculated_rate/methylation_level_filtered.tsv",    
-#                m2="map_sncRNA/calculated_rate/methylation_level_notfiltered.tsv"
-                sncrna_aligned=expand("map_sncRNA/{sample}.ribosomal.sam",sample=ADDSAMPLE),
+	input:
+#		sorted_sam=expand("map_sncRNA/sorted_sam/{sample}.sorted.sam", sample=SAMPLE_ALL),
+#		rib_table=expand("map_sncRNA/table/{sample}_hisat3n_table.tsv", sample=SAMPLE),
+#		m1="map_sncRNA/calculated_rate/methylation_level_filtered.tsv",	
+#		m2="map_sncRNA/calculated_rate/methylation_level_notfiltered.tsv"
+		sncrna_aligned=expand("map_sncRNA/{sample}.ribosomal.sam",sample=ADDSAMPLE),
                 fq1=expand("sncRNA_depleted/{sample}_R1.fastq",sample=ADDSAMPLE),
-		summary=expand("map_sncRNA/{sample}.sncRNA.summary",sample=ADDSAMPLE)
+                summary=expand("map_sncRNA/{sample}.sncRNA.summary",sample=ADDSAMPLE)
 
 # # PE
 # rule trim:
@@ -59,15 +59,15 @@ rule map_sncRNA_SE:
 		fq1="sncRNA_depleted/{sample}_R1.fastq",
 		summary="map_sncRNA/{sample}.sncRNA.summary"
 	shell:
-		"hisat-3n -q -x ~/data/reference/Homo_sapiens/hisat_18S_28SrRNA_CT/GRCh38_rRNA --summary-file {output.summary} --new-summary -1 {input.input1} -S {output.sncrna_aligned} --base-change C,T -p 2 --un sncRNA_depleted/{wildcards.sample}_R%.fastq"
+            "hisat-3n -q -x ~/data/reference/Homo_sapiens/hisat_18S_28SrRNA_CT/GRCh38_rRNA --summary-file {output.summary} --new-summary -U {input.input1} -S {output.sncrna_aligned} --base-change C,T -p 2 --un sncRNA_depleted/{wildcards.sample}.fastq"
 
 # SE end
 
 # 
 # #merge SE and PE
 # rule merge:
-#         input:
-#                 "map_sncRNA/{sample}.ribosomal.sam"
+#		 input:
+#				 "map_sncRNA/{sample}.ribosomal.sam"
 # 
 # 
 # 
@@ -84,80 +84,79 @@ rule map_sncRNA_SE:
 # 		samtools sort -O sam -o {output.sorted_sam} -@ 2 {input}
 # 		samtools depth -a -o {output.depth} -@ 2 {output.sorted_sam}
 # 		""" 
-#                 
+#				 
 # rule hisat_table_sncRNA:
-#         input:
-#                 "map_sncRNA/sorted_sam/{sample}.sorted.sam"
-#         output:
-#                 "map_sncRNA/table/{sample}_hisat3n_table.tsv"
-#         shell:
-#                 "hisat-3n-table -p 16 --alignments {input} --ref /home/yliuchicago/data/reference/Homo_sapiens/hisat_18S_28SrRNA_CT/Homo_sapiens.GRCh38.28S.18S.fa --output-name {output} --base-change C,T"
+#		 input:
+#				 "map_sncRNA/sorted_sam/{sample}.sorted.sam"
+#		 output:
+#				 "map_sncRNA/table/{sample}_hisat3n_table.tsv"
+#		 shell:
+#				 "hisat-3n-table -p 16 --alignments {input} --ref /home/yliuchicago/data/reference/Homo_sapiens/hisat_18S_28SrRNA_CT/Homo_sapiens.GRCh38.28S.18S.fa --output-name {output} --base-change C,T"
 # 
 # rule calculate_methylation_rate:
-#     input:
-#         expand(
-#             "map_sncRNA/table/{sample}_hisat3n_table.tsv",
-#             sample=SAMPLE
-#         ),
-#     output:
-#         "map_sncRNA/calculated_rate/methylation_level_notfiltered.tsv",
-#     threads: 4
-#     resources:
-#         mem_mb=8000,
-#     shell:
-#         """
-#         (
-#         echo -e "Sample\\tChrom\\tPos\\tStrand\\tUnconverted\\tDepth\\tRatio"
-#         for file in {input}; do
-#             sample=`basename $file | cut -d. -f1`
-#             cat $file | awk -v samplename="$sample" 'BEGIN{{FS="\\t"; OFS="\\t"}} NR > 1 {{ print samplename,$1,$2,$3,$7,$7+$5,$7/($7+$5) }}'
-#         done
-#         ) > {output}
-#         """
+#	 input:
+#		 expand(
+#			 "map_sncRNA/table/{sample}_hisat3n_table.tsv",
+#			 sample=SAMPLE
+#		 ),
+#	 output:
+#		 "map_sncRNA/calculated_rate/methylation_level_notfiltered.tsv",
+#	 threads: 4
+#	 resources:
+#		 mem_mb=8000,
+#	 shell:
+#		 """
+#		 (
+#		 echo -e "Sample\\tChrom\\tPos\\tStrand\\tUnconverted\\tDepth\\tRatio"
+#		 for file in {input}; do
+#			 sample=`basename $file | cut -d. -f1`
+#			 cat $file | awk -v samplename="$sample" 'BEGIN{{FS="\\t"; OFS="\\t"}} NR > 1 {{ print samplename,$1,$2,$3,$7,$7+$5,$7/($7+$5) }}'
+#		 done
+#		 ) > {output}
+#		 """
 # 
 # 
 # 
 # 
 # rule hisat2_3n_filtering:
-#         input:
-#                 "map_sncRNA/sorted_sam/{sample}.sorted.sam"
-#         output:
-#                 "map_sncRNA/sorted_sam/{sample}.sorted.filtered.sam"
-#         shell:
-#                 """samtools view -@ 6 -e "[Zf] <= 3 && 3 * [Zf] <= [Zf] + [Yf]" {input} -O SAM -o {output}"""
+#		 input:
+#				 "map_sncRNA/sorted_sam/{sample}.sorted.sam"
+#		 output:
+#				 "map_sncRNA/sorted_sam/{sample}.sorted.filtered.sam"
+#		 shell:
+#				 """samtools view -@ 6 -e "[Zf] <= 3 && 3 * [Zf] <= [Zf] + [Yf]" {input} -O SAM -o {output}"""
 # 
-#                 
+#				 
 # rule hisat_table_filtered_sncRNA:
-#         input:
-#                 "map_sncRNA/sorted_sam/{sample}.sorted.filtered.sam"
-#         output:
-#                 "map_sncRNA/table/{sample}_filtered_hisat3n_table.tsv"
-#         shell:
-#                 "hisat-3n-table -p 16 --alignments {input} --ref /home/yliuchicago/data/reference/Homo_sapiens/hisat_18S_28SrRNA_CT/Homo_sapiens.GRCh38.28S.18S.fa --output-name {output} --base-change C,T"
-#                 
+#		 input:
+#				 "map_sncRNA/sorted_sam/{sample}.sorted.filtered.sam"
+#		 output:
+#				 "map_sncRNA/table/{sample}_filtered_hisat3n_table.tsv"
+#		 shell:
+#				 "hisat-3n-table -p 16 --alignments {input} --ref /home/yliuchicago/data/reference/Homo_sapiens/hisat_18S_28SrRNA_CT/Homo_sapiens.GRCh38.28S.18S.fa --output-name {output} --base-change C,T"
+#				 
 # 
 # 
 # rule calculate_methylation_rate_filtered:
-#     input:
-#         expand(
-#             "map_sncRNA/table/{sample}_filtered_hisat3n_table.tsv",
-#             sample=SAMPLE
-#         )
-#     output:
-#         "map_sncRNA/calculated_rate/methylation_level_filtered.tsv",
-#     threads: 4
-#     resources:
-#         mem_mb=8000,
-#     shell:
-#         """
-#         (
-#         echo -e "Sample\\tChrom\\tPos\\tStrand\\tUnconverted\\tDepth\\tRatio"
-#         for file in {input}; do
-#             sample=`basename $file | cut -d. -f1`
-#             cat $file | awk -v samplename="$sample" 'BEGIN{{FS="\\t"; OFS="\\t"}} NR > 1 {{ print samplename,$1,$2,$3,$7,$7+$5,$7/($7+$5) }}'
-#         done
-#         ) > {output}
-#         """
+#	 input:
+#		 expand(
+#			 "map_sncRNA/table/{sample}_filtered_hisat3n_table.tsv", sample=SAMPLE
+#		 )
+#	 output:
+#		 "map_sncRNA/calculated_rate/methylation_level_filtered.tsv",
+#	 threads: 4
+#	 resources:
+#		 mem_mb=8000,
+#	 shell:
+#		 """
+#		 (
+#		 echo -e "Sample\\tChrom\\tPos\\tStrand\\tUnconverted\\tDepth\\tRatio"
+#		 for file in {input}; do
+#			 sample=`basename $file | cut -d. -f1`
+#			 cat $file | awk -v samplename="$sample" 'BEGIN{{FS="\\t"; OFS="\\t"}} NR > 1 {{ print samplename,$1,$2,$3,$7,$7+$5,$7/($7+$5) }}'
+#		 done
+#		 ) > {output}
+#		 """
 # 
 
 
