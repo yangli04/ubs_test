@@ -17,26 +17,26 @@ rule all:
 # PE
 rule trim:
 	input:
-		input1="raw_data/{sample}_R1_001.fastq",
-		input2="raw_data/{sample}_R2_001.fastq"
+		input1="raw_data_PE/{sample}_S1_R1_001.fastq",
+		input2="raw_data_PE/{sample}_S1_R2_001.fastq",
 	output:
-		output1="trimmed/trimmed_{sample}_R1.fastq",
-		output2="trimmed/trimmed_{sample}_R2.fastq",
-		tooshort1="trimmed/tooshort/{sample}.tooshort.1.fq",
-		tooshort2="trimmed/tooshort/{sample}.tooshort.2.fq",
-		log_file="trimmed/{sample}.cutadapt.log"
+		output1="trimmed_PE/trimmed_{sample}_R1.fastq",
+		output2="trimmed_PE/trimmed_{sample}_R2.fastq",
+		tooshort1="trimmed_PE/tooshort/{sample}.tooshort.1.fq",
+		tooshort2="trimmed_PE/tooshort/{sample}.tooshort.2.fq",
+		log_file="trimmed_PE/{sample}.cutadapt.log",
 	shell:
 		"""cutadapt -j 10 -m 20 -q 15 -a "AGATCGGAAGAGCACACGTCTGAACTCCAGTCA;anywhere;" -A "AGATCGGAAGAGCGTCGTGTAGGGAAAGAGTGT;anywhere;" -u 3 -U 3 -u -3 -U -3 --nextseq-trim=15 -o {output.output1} -p {output.output2} --too-short-output {output.tooshort1} --too-short-paired-output {output.tooshort2} {input.input1} {input.input2} > {output.log_file}"""
 
 rule map_sncRNA:
 	input:
-		input1="trimmed/trimmed_{sample}_R1.fastq",
-		input2="trimmed/trimmed_{sample}_R2.fastq"
+		input1="trimmed_PE/trimmed_{sample}_R1.fastq",
+		input2="trimmed_PE/trimmed_{sample}_R2.fastq",
 	output:
-		sncrna_aligned="map_sncRNA/{sample}.ribosomal.sam",
-		fq1="sncRNA_depleted/{sample}_R1.fastq",
-		fq2="sncRNA_depleted/{sample}_R2.fastq",
-		summary="map_sncRNA/{sample}.sncRNA.summary"
+		sncrna_aligned=temp("map_sncRNA/{sample}_S1.ribosomal.sam"),
+		fq1="sncRNA_depleted/{sample}_S1_R1.fastq",
+		fq2="sncRNA_depleted/{sample}_S1_R2.fastq",
+		summary="map_sncRNA/{sample}_S1.sncRNA.summary",
 	shell:
 		"hisat-3n -q -x ~/data/reference/Homo_sapiens/hisat_18S_28SrRNA_CT/GRCh38_rRNA --summary-file {output.summary} --new-summary -1 {input.input1} -2 {input.input2} -S {output.sncrna_aligned} --base-change C,T -p 2 --un-conc sncRNA_depleted/{wildcards.sample}_R%.fastq"
 # PE end 
@@ -45,21 +45,21 @@ rule map_sncRNA:
 # SE
 rule trim_SE:
 	input:
-		input1="raw_data/{sample}_R1_001.fastq",
+		input1="raw_data/{sample}_S2_R1_001.fastq",
 	output:
-		output1="trimmed/trimmed_{sample}_R1.fastq",
-		tooshort1="trimmed/tooshort/{sample}.tooshort.1.fq",
-		log_file="trimmed/{sample}.cutadapt.log"
+		output1="trimmed_SE/trimmed_{sample}_R1.fastq",
+		tooshort1="trimmed_SE/tooshort/{sample}.tooshort.1.fq",
+		log_file="trimmed_SE/{sample}.cutadapt.log",
 	shell:
 		"""cutadapt -j 10 -m 20 -q 15 -a "AGATCGGAAGAGCACACGTCTGAACTCCAGTCA;anywhere;" -u 3 -u -3 --nextseq-trim=15 -o {output.output1} --too-short-output {output.tooshort1} {input.input1} > {output.log_file}"""
 
 rule map_sncRNA_SE:
 	input:
-		input1="trimmed/trimmed_{sample}_R1.fastq",
+		input1="trimmed_SE/trimmed_{sample}_R1.fastq",
 	output:
-		sncrna_aligned="map_sncRNA/{sample}.ribosomal.sam",
-		fq1="sncRNA_depleted/{sample}_R1.fastq",
-		summary="map_sncRNA/{sample}.sncRNA.summary"
+		sncrna_aligned=temp("map_sncRNA/{sample}_S2.ribosomal.sam"),
+		fq1="sncRNA_depleted/{sample}_S2_R1.fastq",
+		summary="map_sncRNA/{sample}_S2.sncRNA.summary",
 	shell:
             "hisat-3n -q -x ~/data/reference/Homo_sapiens/hisat_18S_28SrRNA_CT/GRCh38_rRNA --summary-file {output.summary} --new-summary -U {input.input1} -S {output.sncrna_aligned} --base-change C,T -p 2 --un {output.fq1}"
 
@@ -67,19 +67,35 @@ rule map_sncRNA_SE:
 
 #merge SE and PE
 
-rule merge:
+rule sort_sam:
 	input:
-                "map_sncRNA/{sample}.ribosomal.sam"
+                s1="map_sncRNA/{sample}_S1.ribosomal.sam",
+                s2="map_sncRNA/{sample}_S2.ribosomal.sam",
+        output:
+                S1=temp("map_sncRNA/{sample}_S1_sorted.sam"),
+                S2=temp("map_sncRNA/{sample}_S2_sorted.sam"),
+        shell:
+                """
+		samtools sort -O sam -o {output.S1} -@ 2 {input.s1}
+		samtools sort -O sam -o {output.S2} -@ 2 {input.s2}
+                """
 
-
+rule merge:
+        input:
+                "map_sncRNA/{sample}_S1_sorted.sam",
+                "map_sncRNA/{sample}_S2_sorted.sam",
+        output:
+                "map_sncRNA/{sample}.ribosomal.sam",
+        shell:
+                "samtools merge -@ 4 -o {output} {input}"
 
 rule flag_sort_depth:
 	input:
-		"map_sncRNA/{sample}.ribosomal.sam"
+		"map_sncRNA/{sample}.ribosomal.sam",
 	output:
 		sorted_sam="map_sncRNA/sorted_sam/{sample}.sorted.sam",
 		flagstat="map_sncRNA/flagstat/{sample}.rRNA.flagstat",
-		depth="map_sncRNA/depth/{sample}.rRNA.depth"
+		depth="map_sncRNA/depth/{sample}.rRNA.depth",
 	shell:
 		"""
 		samtools flagstat {input} > {output.flagstat}
@@ -88,11 +104,13 @@ rule flag_sort_depth:
 		""" 
 rule hisat_table_sncRNA:
         input:
-                "map_sncRNA/sorted_sam/{sample}.sorted.sam"
+                "map_sncRNA/sorted_sam/{sample}.sorted.sam",
         output:
-                "map_sncRNA/table/{sample}_hisat3n_table.tsv"
+                "map_sncRNA/table/{sample}_hisat3n_table.tsv",
         shell:
-		"hisat-3n-table -p 16 --alignments {input} --ref /home/yliuchicago/data/reference/Homo_sapiens/hisat_18S_28SrRNA_CT/Homo_sapiens.GRCh38.28S.18S.fa --output-name {output} --base-change C,T"
+                """
+                hisat-3n-table -p 16 --alignments {input} --ref /home/yliuchicago/data/reference/Homo_sapiens/hisat_18S_28SrRNA_CT/Homo_sapiens.GRCh38.28S.18S.fa --output-name {output} --base-change C,T
+                """
 
 rule calculate_methylation_rate:
         input:
@@ -116,25 +134,22 @@ rule calculate_methylation_rate:
 		 ) > {output}
 		 """
 
-
-
-
 rule hisat2_3n_filtering:
-		input:
-				"map_sncRNA/sorted_sam/{sample}.sorted.sam"
-		output:
-				"map_sncRNA/sorted_sam/{sample}.sorted.filtered.sam"
-		shell:
-				"""samtools view -@ 6 -e "[Zf] <= 3 && 3 * [Zf] <= [Zf] + [Yf]" {input} -O SAM -o {output}"""
+        input:
+                "map_sncRNA/sorted_sam/{sample}.sorted.sam",
+        output:
+                "map_sncRNA/sorted_sam/{sample}.sorted.filtered.sam",
+	shell:
+	        """samtools view -@ 6 -e "[Zf] <= 3 && 3 * [Zf] <= [Zf] + [Yf]" {input} -O SAM -o {output}"""
+
 
 rule hisat_table_filtered_sncRNA:
-		input:
-				"map_sncRNA/sorted_sam/{sample}.sorted.filtered.sam"
-		output:
-				"map_sncRNA/table/{sample}_filtered_hisat3n_table.tsv"
-		shell:
-				"hisat-3n-table -p 16 --alignments {input} --ref /home/yliuchicago/data/reference/Homo_sapiens/hisat_18S_28SrRNA_CT/Homo_sapiens.GRCh38.28S.18S.fa --output-name {output} --base-change C,T"
-				
+	input:
+                "map_sncRNA/sorted_sam/{sample}.sorted.filtered.sam",
+	output:
+		"map_sncRNA/table/{sample}_filtered_hisat3n_table.tsv",
+        shell:
+		"hisat-3n-table -p 16 --alignments {input} --ref /home/yliuchicago/data/reference/Homo_sapiens/hisat_18S_28SrRNA_CT/Homo_sapiens.GRCh38.28S.18S.fa --output-name {output} --base-change C,T"
 
 
 rule calculate_methylation_rate_filtered:
@@ -160,24 +175,24 @@ rule calculate_methylation_rate_filtered:
 
 rule map_genome:
 	input:
-		input1="sncRNA_depleted/{sample}_R1.fastq",
-		input2="sncRNA_depleted/{sample}_R2.fastq"
+		input1="sncRNA_depleted/{sample}_S1_R1.fastq",
+                input2="sncRNA_depleted/{sample}_S1_R2.fastq",
 	output:
 		genome_aligned="genome/{sample}.genome.sam",
 		summary="genome/{sample}.genome.summary",
 		fq1="sncRNA_and_Genome_depleted/{sample}_contamination_R1.fastq",
-		fq2="sncRNA_and_Genome_depleted/{sample}_contamination_R2.fastq"
+		fq2="sncRNA_and_Genome_depleted/{sample}_contamination_R2.fastq",
 	shell:
 		"hisat-3n -q -x /home/yliuchicago/data/reference/Homo_sapiens/hisat_3n_CT/GRCh38_CT -1 {input.input1} -2 {input.input2}  --summary-file {output.summary} --new-summary --base-change C,T -p 2 -S {output.genome_aligned} --un-conc sncRNA_and_Genome_depleted/{wildcards.sample}_contamination_R%.fastq"
 
 
 rule flag_sort_depth_genome:
 	input:
-		"genome/{sample}.genome.sam"
+		"genome/{sample}.genome.sam",
 	output:
 		sorted_sam="genome/sorted_sam/{sample}.genome.sorted.sam",
 		flagstat="genome/flagstat/{sample}.genome.flagstat",
-		depth="genome/depth/{sample}.genome.depth"
+		depth="genome/depth/{sample}.genome.depth",
 	shell:
 		"""
 		samtools flagstat {input} > {output.flagstat}
@@ -187,8 +202,8 @@ rule flag_sort_depth_genome:
 
 rule hisat_table:
 	input:
-		"genome/sorted_sam/{sample}.genome.sorted.sam"
+		"genome/sorted_sam/{sample}.genome.sorted.sam",
 	output:
-		"genome_table/{sample}_hisat3n_table.tsv"
+		"genome_table/{sample}_hisat3n_table.tsv",
 	shell:
 		"hisat-3n-table -p 16 --alignments {input} --ref /home/yliuchicago/data/reference/Homo_sapiens/Homo_sapiens.GRCh38.dna.toplevel.fa --output-name {output} --base-change C,T"
