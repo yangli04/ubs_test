@@ -2,8 +2,8 @@
 # ADDSAMPLE=['XY-1_S2','XY-2_S2','XY-3_S2','XY-4_S2','XY-5_S2','XY-6_S2']
 
 #SAMPLE=["XY-1","XY-2","XY-3","XY-4","XY-5","XY-6"]
-SAMPLE=["HL-A1", "HL-A2", "HL-A3", "HL-A4","HL-A5","HL-A6","HL-A7"]
-BATCH=["S1"]
+SAMPLE=["HL-A1"]
+BATCH=["S1","S2"]
 
 wildcard_constraints:
     sample="HL-A[0-9]"
@@ -41,7 +41,7 @@ rule map_sncRNA_PE:
         fq2="sncRNA_depleted/{sample}_S1_R2.fastq.gz",
         summary="map_sncRNA/{sample}_S1.sncRNA.summary",
     params:
-                un="sncRNA_depleted/{sample}_S1_R%.fastq.gz",
+        un="sncRNA_depleted/{sample}_S1_R%.fastq.gz",
     shell:
         "hisat-3n -q -x ~/data/reference/Homo_sapiens/hisat_18S_28SrRNA_CT/GRCh38_rRNA --summary-file {output.summary} --new-summary -1 {input.input1} -2 {input.input2} -S {output.sncrna_aligned} --base-change C,T -p 2 --un-conc {params.un}"
 # PE end 
