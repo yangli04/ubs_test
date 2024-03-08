@@ -2,8 +2,9 @@
 # ADDSAMPLE=['XY-1_S2','XY-2_S2','XY-3_S2','XY-4_S2','XY-5_S2','XY-6_S2']
 
 #SAMPLE=["XY-1","XY-2","XY-3","XY-4","XY-5","XY-6"]
-SAMPLE=["HL-A1"]
-BATCH=["S1","S2"]
+SAMPLE=["HL-A1", "HL-A2", "HL-A3", "HL-A4","HL-A5","HL-A6","HL-A7"]
+# start from S1 as paired end sequencing. S2 means single-end sequencing. 
+BATCH=["S1"]
 
 wildcard_constraints:
     sample="HL-A[0-9]"
@@ -41,7 +42,7 @@ rule map_sncRNA_PE:
         fq2="sncRNA_depleted/{sample}_S1_R2.fastq.gz",
         summary="map_sncRNA/{sample}_S1.sncRNA.summary",
     params:
-        un="sncRNA_depleted/{sample}_S1_R%.fastq.gz",
+                un="sncRNA_depleted/{sample}_S1_R%.fastq.gz",
     shell:
         "hisat-3n -q -x ~/data/reference/Homo_sapiens/hisat_18S_28SrRNA_CT/GRCh38_rRNA --summary-file {output.summary} --new-summary -1 {input.input1} -2 {input.input2} -S {output.sncrna_aligned} --base-change C,T -p 2 --un-conc {params.un}"
 # PE end 
@@ -196,33 +197,70 @@ rule calculate_methylation_rate_filtered:
          ) > {output}
          """
 
-#rule map_genome:
-#    input:
-#        input1="sncRNA_depleted/{sample}_S1_R1.fastq.gz",
-#        input2="sncRNA_depleted/{sample}_S1_R2.fastq.gz",
-#    output:
-#        genome_aligned="genome/{sample}.genome.sam",
-#        summary="genome/{sample}.genome.summary",
-#        fq1="sncRNA_and_Genome_depleted/{sample}_contamination_R1.fastq.gz",
-#        fq2="sncRNA_and_Genome_depleted/{sample}_contamination_R2.fastq.gz",
-#    shell:
-#        "hisat-3n -q -x /home/yliuchicago/data/reference/Homo_sapiens/hisat_3n_CT/GRCh38_CT -1 {input.input1} -2 {input.input2}  --summary-file {output.summary} --new-summary --base-change C,T -p 2 -S {output.genome_aligned} --un-conc sncRNA_and_Genome_depleted/{wildcards.sample}_contamination_R%.fastq.gz"
-#
-#
-#rule flag_sort_depth_genome:
-#    input:
-#        "genome/{sample}.genome.sam",
-#    output:
-#        sorted_sam="genome/sorted_sam/{sample}.genome.sorted.sam",
-#        flagstat="genome/flagstat/{sample}.genome.flagstat",
-#        depth="genome/depth/{sample}.genome.depth",
-#    shell:
-#        """
-#        samtools flagstat {input} > {output.flagstat}
-#        samtools sort -O sam -o {output.sorted_sam} -@ 2 {input}
-#        samtools depth -a -o {output.depth} -@ 2 {output.sorted_sam}
-#        """
-#
+rule map_genome_PE:
+    input:
+        input1="sncRNA_depleted/{sample}_S1_R1.fastq.gz",
+        input2="sncRNA_depleted/{sample}_S1_R2.fastq.gz",
+    output:
+        genome_aligned=temp("mapping_PE/{sample}_S1.genome.sam"),
+        summary=temp("mapping_PE/{sample}_S1.genome.summary"),
+        fq1="sncRNA_and_Genome_depleted/{sample}_S1_contamination_R1.fastq.gz",
+        fq2="sncRNA_and_Genome_depleted/{sample}_S1_contamination_R2.fastq.gz",
+    shell:
+        "hisat-3n -q -x /home/yliuchicago/data/reference/Homo_sapiens/hisat_3n_CT/GRCh38_CT -1 {input.input1} -2 {input.input2}  --summary-file {output.summary} --new-summary --base-change C,T -p 2 -S {output.genome_aligned} --un-conc sncRNA_and_Genome_depleted/{wildcards.sample}_contamination_R%.fastq.gz"
+
+
+rule map_genome_SE:
+    input:
+        fq1="sncRNA_depleted/{sample}_S2_R1.fastq.gz",
+    output:
+        genome_aligned=temp("mapping_SE/{sample}_S2.genome.sam"),
+        summary=temp("mapping_SE/{sample}_S2.genome.summary"),
+        fq1="sncRNA_and_Genome_depleted/{sample}_S2_contamination_R1.fastq.gz",
+    shell:
+        "hisat-3n -q -x /home/yliuchicago/data/reference/Homo_sapiens/hisat_3n_CT/GRCh38_CT --summary-file {output.summary} --new-summary -U {input.fq1} -S {output.genome_aligned} --base-change C,T -p 2 --un {output.fq1}"
+
+
+
+
+
+## Sort it first before input to this rule! 
+
+## NEED TO BE MODIFIED TO SATISFY GENOME MAPPING. 
+rule merge_genome:
+    input:
+        "map_sncRNA/{sample}_S1_sorted.sam" if "S1" in BATCH else [],
+        "map_sncRNA/{sample}_S2_sorted.sam" if "S2" in BATCH else [],
+    output:
+                "map_sncRNA/{sample}.ribosomal.sam",
+    run:
+        if len(BATCH) == 2:
+            shell(
+                """
+            samtools merge -@ 4 -o {output} {input}
+                """
+            )
+        else:
+            shell(
+                """
+            mv {input} {output}
+                """
+            )
+
+rule flag_sort_depth_genome:
+    input:
+        "mapping_PE/{sample}.genome.sam",
+    output:
+        sorted_sam="mapping_PE/sorted_sam/{sample}.genome.sorted.sam",
+        flagstat="mapping_PE/flagstat/{sample}.genome.flagstat",
+        depth="mapping_PE/depth/{sample}.genome.depth",
+    shell:
+        """
+        samtools flagstat {input} > {output.flagstat}
+        samtools sort -O sam -o {output.sorted_sam} -@ 2 {input}
+        samtools depth -a -o {output.depth} -@ 2 {output.sorted_sam}
+        """
+
 #rule hisat_table:
 #    input:
 #        "genome/sorted_sam/{sample}.genome.sorted.sam",
