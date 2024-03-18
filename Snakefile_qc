@@ -1,0 +1,68 @@
+SAMPLE=["XY-1","XY-2","XY-3","XY-4","XY-5","XY-6"]
+# S1 means batch 1, which should be the paired-end sequencing results; S2 means batch 2, which should be the single end results
+BATCH=["S1","S2"]
+
+wildcard_constraints:
+	sample="XY-[0-9]"
+rule all:
+    input:
+        "report_qc/cutadapt_SE_qc.html" if "S2" in BATCH else [],
+        "report_qc/cutadapt_PE_qc.html" if "S1" in BATCH else [],
+        "report_qc/report_falco_after.html",
+
+rule report_cutadapt_SE:
+    input:
+        expand("trimmed_SE/{sample}.cutadapt.log", sample=SAMPLE),
+    output:
+        "report_qc/cutadapt_SE_qc.html",
+    shell:
+        "multiqc -f -m cutadapt -n {output} {input}"
+
+rule report_cutadapt_PE:
+    input:
+        expand("trimmed_PE/{sample}.cutadapt.log", sample=SAMPLE),
+    output:
+        "report_qc/cutadapt_PE_qc.html",
+    shell:
+        "multiqc -f -m cutadapt -n {output} {input}"
+
+
+# trimmed part qc
+
+
+rule falco_after_SE:
+    input:
+        "trimmed_SE/trimmed_{sample}_R1.fastq",
+    output:
+        html="quality_control/falco_after/{sample}_SE/fastqc_report.html",
+        text="quality_control/falco_after/{sample}_SE/fastqc_data.txt",
+        summary="quality_control/falco_after/{sample}_SE/summary.txt",
+    params:
+        "quality_control/falco_after/{sample}_SE",
+    shell:
+        "falco -o {params} {input}"
+
+# rule falco_after_PE:
+#     input:
+#         "trimmed_PE/trimmed_{sample}_R.fq",
+#     output:
+#         html="quality_control/falco_after/{sample}_SE/fastqc_report.html",
+#         text="quality_control/falco_after/{sample}_SE/fastqc_data.txt",
+#         summary="quality_control/falco_after/{sample}_SE/summary.txt",
+#     params:
+#         "quality_control/falco_after/{sample}_SE",
+#     shell:
+#         "falco -o {params} {input}"
+
+rule report_falco_after:
+    input:
+        expand("quality_control/falco_after/{sample}_SE/fastqc_data.txt", sample=SAMPLE),
+    output:
+        "report_qc/report_falco_after.html",
+    threads: 2
+    resources:
+        mem_mb=8000,
+    shell:
+        "multiqc -f -m fastqc -n {output} {input}"
+
+
